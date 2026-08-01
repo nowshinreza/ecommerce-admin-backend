@@ -26,23 +26,92 @@ dotenv.config();
 
 const app = express();
 
+/*
+  FRONTEND_URLS can contain multiple comma-separated URLs.
+
+  Example:
+  FRONTEND_URLS=https://site-one.vercel.app,https://site-two.vercel.app
+*/
+const environmentOrigins = (
+  process.env.FRONTEND_URLS ||
+  process.env.FRONTEND_URL ||
+  ""
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const allowedOrigins = [
   "http://localhost:5173",
-  process.env.FRONTEND_URL,
-].filter(Boolean);
+  ...environmentOrigins,
+];
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+function isAllowedVercelOrigin(origin) {
+  if (!origin) {
+    return false;
+  }
 
-      return callback(new Error("Not allowed by CORS"));
-    },
-    credentials: true,
-  }),
-);
+  try {
+    const { hostname, protocol } = new URL(origin);
+
+    return (
+      protocol === "https:" &&
+      hostname.endsWith(".vercel.app") &&
+      hostname.startsWith("ecommerce-admin-frontend")
+    );
+  } catch {
+    return false;
+  }
+}
+
+const corsOptions = {
+  origin(origin, callback) {
+    /*
+      Requests without an Origin header include server-to-server
+      requests, Postman, Swagger and health checks.
+    */
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    const isExplicitlyAllowed =
+      allowedOrigins.includes(origin);
+
+    const isProjectVercelDomain =
+      isAllowedVercelOrigin(origin);
+
+    if (
+      isExplicitlyAllowed ||
+      isProjectVercelDomain
+    ) {
+      return callback(null, true);
+    }
+
+    console.error(`Blocked by CORS: ${origin}`);
+
+    return callback(
+      new Error(`Origin not allowed by CORS: ${origin}`),
+    );
+  },
+
+  credentials: true,
+
+  methods: [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS",
+  ],
+
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+  ],
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
 
@@ -65,18 +134,28 @@ app.get("/", (req, res) => {
   });
 });
 
-app.get("/database-test", async (req, res, next) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-
-    return res.status(200).json({
-      success: true,
-      message: "Database connected successfully",
-    });
-  } catch (error) {
-    next(error);
-  }
+app.get("/healthz", (req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: "Server is healthy",
+  });
 });
+
+app.get(
+  "/database-test",
+  async (req, res, next) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+
+      return res.status(200).json({
+        success: true,
+        message: "Database connected successfully",
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/permissions", permissionRoutes);
@@ -95,4 +174,9 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(
+    `Allowed frontend origins: ${
+      allowedOrigins.join(", ") || "none"
+    }`,
+  );
 });
