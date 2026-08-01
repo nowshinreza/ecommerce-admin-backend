@@ -1,28 +1,54 @@
 # E-Commerce Admin Backend
 
-REST API for an e-commerce administration dashboard built for the Trends Bird Limited Backend Developer Intern assignment.
+REST API for an e-commerce administration dashboard with authentication, role-based access control, shared media, nested categories, brands, attributes, simple products, and variable products.
 
-The backend implements JWT authentication, refresh-token rotation, role-based access control, PostgreSQL persistence, product catalog management, shared media management, validation, and permission-protected API routes.
+## Live Links
 
-## Live API
+### Frontend
+
+```text
+https://ecommerce-admin-frontend-24gqhp1v8-nowshinrezas-projects.vercel.app?_vercel_share=RBfYv9vgWavaUtTOBKNLjazjckCEHgMt
+```
+
+### Backend API
 
 ```text
 https://ecommerce-admin-backend-u5sd.onrender.com
 ```
 
-### API Documentation
+### Swagger API Documentation
 
 ```text
 https://ecommerce-admin-backend-u5sd.onrender.com/api-docs
 ```
 
-> Replace the URLs above if the deployed Render service URL changes.
+## Seeded Accounts
+
+### Super Administrator
+
+```text
+Email: admin@example.com
+Password: Admin123!
+```
+
+The Super Administrator has every permission in the system.
+
+### Catalog Manager
+
+```text
+Email: catalog@example.com
+Password: Catalog123!
+```
+
+The Catalog Manager has limited catalog permissions and does not have permission, role, or user administration access.
+
+This account can be used to verify `403 Forbidden` responses.
 
 ---
 
 ## Technology Stack
 
-- Node.js
+- Node.js 22 LTS
 - Express.js
 - JavaScript with ES Modules
 - PostgreSQL
@@ -32,17 +58,7 @@ https://ecommerce-admin-backend-u5sd.onrender.com/api-docs
 - Zod
 - Multer
 - Cloudinary
-- Swagger / OpenAPI
-
-## Node.js Version
-
-Node.js 22 LTS is recommended.
-
-Check your version:
-
-```bash
-node --version
-```
+- Swagger/OpenAPI
 
 ---
 
@@ -55,32 +71,47 @@ node --version
 - Long-lived refresh token
 - Refresh-token rotation
 - Current-session endpoint
-- Server-side logout and refresh-token revocation
+- Server-side refresh-token storage
+- Server-side logout and token revocation
 - Inactive-user protection
-- No public user registration
+- No public registration
 
 ### Role-Based Access Control
 
-- Permission names use `module:action`
-- Each user holds exactly one role
-- Each role can hold many permissions
-- API routes enforce permissions server-side
-- Unauthorized requests return `401`
-- Insufficient permissions return `403`
-- The limited catalog account can be used to test denied routes
+- One role per user
+- Many permissions per role
+- Permission format: `module:action`
+- Backend authentication middleware
+- Backend permission middleware
+- `401 Unauthorized` for invalid authentication
+- `403 Forbidden` for insufficient permissions
+- Permission-aware frontend navigation
 
-### Catalog Management
+### Administration Modules
 
-- Permission groups and actions
-- Roles and permission assignment
-- Dashboard users
-- Shared media library
-- Nested categories
+- Authentication
+- Permissions
+- Roles
+- Users
+- Media
+- Categories
 - Brands
-- Attributes and values
+- Attributes
+- Products
+
+### Product Catalog
+
 - Simple products
-- Variable products and variants
-- Product categories, brand, media, price, stock, and status
+- Variable products
+- Product variants
+- Unique product and variant SKUs
+- Product categories
+- Product brands
+- Product media
+- Product thumbnails
+- Prices and sale prices
+- Stock management
+- Attribute values
 
 ---
 
@@ -105,18 +136,11 @@ prisma/
 └── seed.js
 ```
 
-The project separates:
-
-- routing
-- authentication and authorization middleware
-- controllers
-- business logic
-- validation
-- database access
+The project separates routes, controllers, validation, authentication, authorization, services, and database operations.
 
 ---
 
-## Local Setup
+## Local Installation
 
 ### 1. Clone the repository
 
@@ -133,16 +157,16 @@ npm install
 
 ### 3. Create the environment file
 
-Create:
+Create a file named:
 
 ```text
 .env
 ```
 
-Use the following example:
+Add:
 
 ```env
-DATABASE_URL="postgresql://postgres:your_password@localhost:5432/ecommerce_admin?schema=public"
+DATABASE_URL="postgresql://postgres:admin123@localhost:5432/ecommerce_admin?schema=public"
 
 PORT=5000
 NODE_ENV=development
@@ -159,17 +183,17 @@ CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 BACKEND_URL=http://localhost:5000
 ```
 
-Never commit the real `.env` file.
+Do not commit the real `.env` file.
 
 ### 4. Create the PostgreSQL database
 
-Example database name:
+Create a PostgreSQL database named:
 
 ```text
 ecommerce_admin
 ```
 
-Your local connection string may look like:
+Example local connection string:
 
 ```env
 DATABASE_URL="postgresql://postgres:admin123@localhost:5432/ecommerce_admin?schema=public"
@@ -181,7 +205,7 @@ DATABASE_URL="postgresql://postgres:admin123@localhost:5432/ecommerce_admin?sche
 npx prisma generate
 ```
 
-### 6. Run database migrations
+### 6. Run migrations
 
 For local development:
 
@@ -189,7 +213,7 @@ For local development:
 npx prisma migrate dev
 ```
 
-For an existing production database:
+For production:
 
 ```bash
 npx prisma migrate deploy
@@ -207,7 +231,7 @@ npm run prisma:seed
 npm run dev
 ```
 
-The API should run at:
+The local backend will run at:
 
 ```text
 http://localhost:5000
@@ -221,158 +245,284 @@ http://localhost:5000/api-docs
 
 ---
 
-## Available Scripts
+## Available Commands
+
+### Development server
 
 ```bash
 npm run dev
 ```
 
-Starts the server using Nodemon.
+### Production server
 
 ```bash
 npm start
 ```
 
-Starts the production server.
+### Prisma development migration
 
 ```bash
 npm run prisma:migrate
 ```
 
-Runs a Prisma development migration.
+### Prisma client generation
+
+```bash
+npx prisma generate
+```
+
+### Production migration deployment
+
+```bash
+npx prisma migrate deploy
+```
+
+### Database seeding
 
 ```bash
 npm run prisma:seed
 ```
 
-Seeds permissions, roles, and users.
-
----
-
-## Seeded Accounts
-
-### Super Administrator
-
-```text
-Email: admin@example.com
-Password: Admin123!
-```
-
-The administrator role contains all seeded permissions.
-
-### Catalog Manager
-
-```text
-Email: catalog@example.com
-Password: Catalog123!
-```
-
-The catalog manager has access only to catalog-related modules and does not have permission, role, or user administration access.
-
-This account can be used to verify `403 Forbidden` responses.
-
-> Seed credentials are included for assignment review only. They should be changed in a real production system.
-
 ---
 
 ## Authentication Strategy
 
-The application uses the `Authorization` header.
+The application uses bearer-token authentication.
 
-Example:
+Protected requests send:
 
 ```http
 Authorization: Bearer ACCESS_TOKEN
 ```
 
-The access token is short-lived. The refresh token has a longer lifetime and is stored server-side so that it can be revoked.
+The access token is short-lived. The refresh token has a longer lifetime and is stored server-side so it can be rotated and revoked.
 
-During refresh:
+### Login flow
 
-1. The client sends the current refresh token.
-2. The server validates the token and active-user status.
-3. The previous refresh token is revoked or replaced.
-4. A new access token and refresh token are issued.
+1. The user submits an email and password.
+2. The password is checked with bcrypt.
+3. The server returns an access token and refresh token.
+4. The refresh token is stored so it can later be revoked.
 
-During logout:
+### Refresh flow
+
+1. The frontend sends the current refresh token.
+2. The backend validates the token.
+3. The backend checks that the user is still active.
+4. The old refresh token is rotated.
+5. A new access token and refresh token are returned.
+
+### Logout flow
 
 1. The frontend calls the backend logout endpoint.
-2. The stored refresh token is revoked.
-3. The old refresh token can no longer be used.
+2. The refresh token is revoked on the server.
+3. The previous refresh token can no longer be used.
 
-Password hashes and refresh tokens are never returned by API responses.
+Password hashes and refresh tokens are never returned in API responses.
 
 ---
 
 ## Permission Model
 
-Permissions use the following format:
-
-```text
-module:action
-```
+Permissions use lowercase `module:action` names.
 
 Examples:
 
 ```text
-product:create
-media:upload
+dashboard:watch
+permission:create
 role:update
 user:delete
+media:upload
+category:read
+brand:update
+attribute:create
+product:delete
 ```
 
-The main permission groups include:
+The `watch` permission controls whether a user can see and open a module screen.
 
-- Dashboard
-- Permission
-- Role
-- User
-- Media
-- Category
-- Brand
-- Attribute
-- Product
+Operation permissions such as `create`, `read`, `update`, `delete`, `upload`, and `write` control API access.
 
-The sidebar uses `watch` permissions, while individual API operations use actions such as:
-
-```text
-create
-read
-update
-delete
-upload
-write
-```
-
-Access control is enforced by backend middleware and not only by the frontend.
+The backend is the final authority. Hiding buttons in the frontend is only a usability feature.
 
 ---
 
-## User and Deletion Decisions
+## Seeded Permissions
+
+### Dashboard
+
+```text
+dashboard:watch
+```
+
+### Permission
+
+```text
+permission:watch
+permission:create
+permission:read
+permission:update
+permission:delete
+```
+
+### Role
+
+```text
+role:watch
+role:create
+role:read
+role:update
+role:delete
+```
+
+### User
+
+```text
+user:watch
+user:create
+user:read
+user:update
+user:delete
+```
+
+### Media
+
+```text
+media:watch
+media:read
+media:upload
+media:write
+media:delete
+```
+
+### Category
+
+```text
+category:watch
+category:create
+category:read
+category:update
+category:delete
+```
+
+### Brand
+
+```text
+brand:watch
+brand:create
+brand:read
+brand:update
+brand:delete
+```
+
+### Attribute
+
+```text
+attribute:watch
+attribute:create
+attribute:read
+attribute:update
+attribute:delete
+```
+
+### Product
+
+```text
+product:watch
+product:create
+product:read
+product:update
+product:delete
+```
+
+---
+
+## Important Design Decisions
 
 ### Role changes
 
-When a user's role is changed, the new role applies on the next authenticated request because the server retrieves or validates the current user's authorization state.
+A changed role or permission takes effect on the next authenticated request because authorization is checked by the backend.
 
 ### User deletion
 
-Users are currently deleted using a hard-delete operation.
+Users are hard deleted.
+
+### Self-escalation
+
+Users cannot change their own role.
 
 ### Role deletion
 
-A role cannot be deleted while users are assigned to it.
+A role cannot be deleted while users still hold it.
 
 ### Brand deletion
 
 A brand cannot be deleted while products reference it.
 
+### Category deletion
+
+Categories with dependent children or product relationships must be handled safely to prevent orphaned records.
+
 ### Attribute deletion
 
-An attribute or value cannot be safely deleted while it is used by a product variant.
+Attributes and attribute values used by product variants cannot be removed silently.
 
-### Media deletion
+### Product deletion
 
-The intended behavior is to prevent broken references. Media still attached to another record should be refused or detached safely before deleting the Cloudinary asset and database record.
+Deleting a product removes its variants and attachment records, but shared media assets remain available.
+
+### Media storage
+
+Cloudinary is used for persistent media storage.
+
+The process is:
+
+1. Multer receives the file using `memoryStorage`.
+2. File content is validated.
+3. The file buffer is uploaded to Cloudinary.
+4. Cloudinary returns a permanent HTTPS URL.
+5. Media metadata is stored in PostgreSQL.
+6. Other modules attach the shared media record.
+
+---
+
+## Response Format
+
+Successful response example:
+
+```json
+{
+  "success": true,
+  "message": "Request completed successfully",
+  "data": {}
+}
+```
+
+Error response example:
+
+```json
+{
+  "success": false,
+  "message": "Request failed",
+  "errors": {}
+}
+```
+
+---
+
+## HTTP Status Codes
+
+```text
+200 Successful request
+201 Resource created
+400 Invalid request or validation error
+401 Missing, invalid, expired, or revoked authentication
+403 Valid authentication but insufficient permission
+404 Resource not found
+409 Duplicate or conflicting resource
+500 Unexpected server error
+```
 
 ---
 
@@ -380,79 +530,43 @@ The intended behavior is to prevent broken references. Media still attached to a
 
 | Module | Status | Notes |
 |---|---|---|
-| Authentication | Complete | Login, refresh, session and logout implemented |
-| Permission | Complete | Permission groups, actions, CRUD, search and pagination |
-| Role | Complete | Permission assignment, grant-all, CRUD and user-count support |
-| User | Complete | Role assignment, status, search, filters and CRUD |
-| Media | Partial | CRUD and upload flow implemented; Cloudinary production migration must be fully verified |
-| Category | Complete | Nested categories, images, status and ordering |
-| Brand | Complete | CRUD, logo selection, search and status |
+| Authentication | Complete | Login, refresh, session, and logout |
+| Permission | Complete | Permission groups, actions, search, and CRUD |
+| Role | Complete | Role CRUD and permission assignment |
+| User | Complete | Role assignment, filters, status, and CRUD |
+| Media | Complete | Shared upload library with Cloudinary |
+| Category | Complete | Nested hierarchy, parent, image, status, and order |
+| Brand | Complete | CRUD, search, status, and media logo |
 | Attribute | Complete | Attribute types and value management |
-| Product | Partial | Simple and variable product flows implemented; production create flow requires final verification |
-
-This status list is intentionally honest. Media and product should be changed to `Complete` only after their deployed upload and creation flows are verified successfully.
+| Product | Complete | Simple and variable products, variants, categories, brand, and media |
 
 ---
 
-## Important API Behavior
+## Render Deployment
 
-The API uses consistent HTTP status codes:
+### Build command
 
-```text
-200 Successful read or update
-201 Successful creation
-400 Invalid request or validation failure
-401 Missing, invalid, expired or revoked authentication
-403 Valid authentication but insufficient permission
-404 Record not found
-409 Duplicate or conflicting data
-500 Unexpected server error
+```bash
+npm install && npx prisma generate && npx prisma migrate deploy
 ```
 
-Expected bad input should be handled as a validation or conflict response rather than an internal server error.
+### Start command
 
----
-
-## Media Storage
-
-Cloudinary is used for persistent production media storage.
-
-The upload flow is:
-
-1. Multer receives files using `memoryStorage`.
-2. File contents are validated.
-3. The file buffer is uploaded to Cloudinary.
-4. Cloudinary returns a secure HTTPS URL.
-5. The URL and metadata are stored in PostgreSQL.
-6. Products, brands, categories, and attribute values reference the shared media record.
-
-This avoids storing permanent uploads on Render's temporary filesystem.
-
----
-
-## Production Deployment
-
-### Render settings
-
-```text
-Runtime: Node
-Build Command:
-npm install && npx prisma generate && npx prisma migrate deploy
-
-Start Command:
+```bash
 npm start
 ```
 
-### Required Render environment variables
+### Render environment variables
 
 ```env
 DATABASE_URL=your_neon_postgresql_connection_string
+
 NODE_ENV=production
 
 ACCESS_TOKEN_SECRET=your_access_token_secret
 REFRESH_TOKEN_SECRET=your_refresh_token_secret
 
-FRONTEND_URL=https://your-production-vercel-domain.vercel.app
+FRONTEND_URL=https://ecommerce-admin-frontend-24gqhp1v8-nowshinrezas-projects.vercel.app
 
 CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
 CLOUDINARY_API_KEY=your_cloudinary_api_key
@@ -461,7 +575,7 @@ CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 BACKEND_URL=https://ecommerce-admin-backend-u5sd.onrender.com
 ```
 
-After the first production deployment, seed the production database:
+After the first production deployment, run:
 
 ```bash
 npm run prisma:seed
@@ -469,27 +583,23 @@ npm run prisma:seed
 
 ---
 
+## API Documentation
+
+Swagger is available at:
+
+```text
+https://ecommerce-admin-backend-u5sd.onrender.com/api-docs
+```
+
+It can be used to inspect and test the available API endpoints.
+
+---
+
 ## Known Issues
 
-- Render free services may take time to wake after inactivity.
-- Media upload must use Cloudinary or another persistent object-storage service; Render's normal filesystem is temporary.
-- Existing media records created before the Cloudinary migration may contain old `/uploads/...` paths.
-- Product creation should be tested again after the final production database and media configuration are active.
-- Vercel preview URLs may change. The stable production domain should be configured in `FRONTEND_URL`.
-- Automated tests are not currently included.
-
----
-
-## Security Notes
-
-- Passwords are hashed with bcrypt.
-- Access and refresh secrets are stored in environment variables.
-- Database credentials are never committed.
-- Cloudinary API secrets remain backend-only.
-- Routes require authentication unless intentionally public.
-- Permissions are enforced on the API.
-- Uploaded file extensions and client MIME types are not trusted as the only validation source.
-- Refresh tokens can be revoked on logout.
-
----
-
+- Render free services may take several seconds to wake after inactivity.
+- Temporary Vercel preview URLs may change after new deployments.
+- The provided frontend link includes a Vercel sharing token for reviewer access.
+- Automated tests are not included.
+- Upload size is limited to 5 MB per file.
+- A maximum of 10 files can be uploaded in one request.
