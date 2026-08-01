@@ -493,9 +493,3 @@ npm run prisma:seed
 
 ---
 
-## Author
-
-**Md. Adnan Parvez**
-
-B.Sc. in Computer Science and Engineering  
-BRAC University
