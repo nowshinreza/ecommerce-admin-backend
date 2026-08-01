@@ -26,19 +26,13 @@ dotenv.config();
 
 const app = express();
 
-/*
-  FRONTEND_URLS can contain multiple comma-separated URLs.
-
-  Example:
-  FRONTEND_URLS=https://site-one.vercel.app,https://site-two.vercel.app
-*/
 const environmentOrigins = (
   process.env.FRONTEND_URLS ||
   process.env.FRONTEND_URL ||
   ""
 )
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean);
 
 const allowedOrigins = [
@@ -46,18 +40,23 @@ const allowedOrigins = [
   ...environmentOrigins,
 ];
 
-function isAllowedVercelOrigin(origin) {
+function isAllowedOrigin(origin) {
   if (!origin) {
-    return false;
+    return true;
+  }
+
+  const normalizedOrigin = origin.replace(/\/$/, "");
+
+  if (allowedOrigins.includes(normalizedOrigin)) {
+    return true;
   }
 
   try {
-    const { hostname, protocol } = new URL(origin);
+    const parsedOrigin = new URL(normalizedOrigin);
 
     return (
-      protocol === "https:" &&
-      hostname.endsWith(".vercel.app") &&
-      hostname.startsWith("ecommerce-admin-frontend")
+      parsedOrigin.protocol === "https:" &&
+      parsedOrigin.hostname.endsWith(".vercel.app")
     );
   } catch {
     return false;
@@ -66,28 +65,11 @@ function isAllowedVercelOrigin(origin) {
 
 const corsOptions = {
   origin(origin, callback) {
-    /*
-      Requests without an Origin header include server-to-server
-      requests, Postman, Swagger and health checks.
-    */
-    if (!origin) {
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
 
-    const isExplicitlyAllowed =
-      allowedOrigins.includes(origin);
-
-    const isProjectVercelDomain =
-      isAllowedVercelOrigin(origin);
-
-    if (
-      isExplicitlyAllowed ||
-      isProjectVercelDomain
-    ) {
-      return callback(null, true);
-    }
-
-    console.error(`Blocked by CORS: ${origin}`);
+    console.error("Blocked CORS origin:", origin);
 
     return callback(
       new Error(`Origin not allowed by CORS: ${origin}`),
@@ -109,6 +91,8 @@ const corsOptions = {
     "Content-Type",
     "Authorization",
   ],
+
+  optionsSuccessStatus: 204,
 };
 
 app.use(cors(corsOptions));
@@ -176,7 +160,9 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(
     `Allowed frontend origins: ${
-      allowedOrigins.join(", ") || "none"
+      allowedOrigins.length > 0
+        ? allowedOrigins.join(", ")
+        : "none"
     }`,
   );
 });
