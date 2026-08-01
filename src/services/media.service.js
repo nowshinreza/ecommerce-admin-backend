@@ -1,12 +1,9 @@
-import fs from "fs/promises";
-import path from "path";
 import crypto from "crypto";
-import sharp from "sharp";
 import { fileTypeFromBuffer } from "file-type";
 import prisma from "../prisma.js";
+import cloudinary from "../config/cloudinary.js";
 
-const uploadsFolder = path.resolve("uploads");
-const thumbnailsFolder = path.resolve("uploads/thumbnails");
+const CLOUDINARY_FOLDER = "ecommerce-admin";
 
 const allowedMimeTypes = [
   "image/jpeg",
@@ -16,16 +13,6 @@ const allowedMimeTypes = [
   "video/mp4",
   "application/pdf",
 ];
-
-async function ensureUploadFolders() {
-  await fs.mkdir(uploadsFolder, {
-    recursive: true,
-  });
-
-  await fs.mkdir(thumbnailsFolder, {
-    recursive: true,
-  });
-}
 
 function getMediaType(mimeType) {
   if (mimeType.startsWith("image/")) {
@@ -39,121 +26,214 @@ function getMediaType(mimeType) {
   return "document";
 }
 
-async function saveSingleFile(file, userId) {
-  const detectedType = await fileTypeFromBuffer(file.buffer);
+function uploadBuffer(buffer, options = {}) {
+  return new Promise((resolve, reject) => {
+    const uploadStream =
+      cloudinary.uploader.upload_stream(
+        options,
+        (error, result) => {
+          if (error) {
+            reject(error);
+            return;
+          }
 
-  if (!detectedType || !allowedMimeTypes.includes(detectedType.mime)) {
-    const error = new Error("Invalid or unsupported file content");
+          resolve(result);
+        },
+      );
+
+    uploadStream.end(buffer);
+  });
+}
+
+function createThumbnailUrl(uploadResult, mediaType) {
+  if (mediaType !== "image") {
+    return null;
+  }
+
+  return cloudinary.url(uploadResult.public_id, {
+    resource_type: uploadResult.resource_type,
+    secure: true,
+    transformation: [
+      {
+        width: 300,
+        height: 300,
+        crop: "limit",
+      },
+      {
+        quality: "auto",
+        fetch_format: "auto",
+      },
+    ],
+  });
+}
+
+async function deleteCloudinaryAsset(media) {
+  if (!media.storedPath) {
+    return;
+  }
+
+  const resourceType =
+    media.type === "video"
+      ? "video"
+      : media.type === "document"
+        ? "raw"
+        : "image";
+
+  try {
+    await cloudinary.uploader.destroy(
+      media.storedPath,
+      {
+        resource_type: resourceType,
+        invalidate: true,
+      },
+    );
+  } catch (error) {
+    console.error(
+      `Could not delete Cloudinary asset ${media.storedPath}:`,
+      error.message,
+    );
+  }
+}
+
+async function saveSingleFile(file, userId) {
+  const detectedType =
+    await fileTypeFromBuffer(file.buffer);
+
+  if (
+    !detectedType ||
+    !allowedMimeTypes.includes(detectedType.mime)
+  ) {
+    const error = new Error(
+      "Invalid or unsupported file content",
+    );
+
     error.statusCode = 400;
     throw error;
   }
 
-  await ensureUploadFolders();
+  const mediaType = getMediaType(
+    detectedType.mime,
+  );
 
-  const uniqueName = `${crypto.randomUUID()}.${detectedType.ext}`;
-  const filePath = path.join(uploadsFolder, uniqueName);
+  const uniquePublicId =
+    `${crypto.randomUUID()}-${Date.now()}`;
 
-  await fs.writeFile(filePath, file.buffer);
-
-  let width = null;
-  let height = null;
-  let thumbnailUrl = null;
-
-  if (detectedType.mime.startsWith("image/")) {
-    const image = sharp(file.buffer);
-    const metadata = await image.metadata();
-
-    width = metadata.width || null;
-    height = metadata.height || null;
-
-    const thumbnailName = `thumb-${uniqueName}.webp`;
-    const thumbnailPath = path.join(
-      thumbnailsFolder,
-      thumbnailName,
-    );
-
-    await image
-      .resize({
-        width: 300,
-        height: 300,
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .webp({
-        quality: 80,
-      })
-      .toFile(thumbnailPath);
-
-    thumbnailUrl = `/uploads/thumbnails/${thumbnailName}`;
-  }
-
-  return prisma.media.create({
-    data: {
-      fileName: uniqueName,
-      originalName: file.originalname,
-      storedPath: filePath,
-      publicUrl: `/uploads/${uniqueName}`,
-      mimeType: detectedType.mime,
-      type: getMediaType(detectedType.mime),
-      size: file.size,
-      width,
-      height,
-      thumbnail: thumbnailUrl,
-      uploadedById: userId,
+  const uploadResult = await uploadBuffer(
+    file.buffer,
+    {
+      folder: CLOUDINARY_FOLDER,
+      public_id: uniquePublicId,
+      resource_type: "auto",
+      use_filename: false,
+      unique_filename: true,
+      overwrite: false,
     },
-    include: {
-      uploadedBy: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
+  );
+
+  const thumbnailUrl = createThumbnailUrl(
+    uploadResult,
+    mediaType,
+  );
+
+  try {
+    return await prisma.media.create({
+      data: {
+        fileName:
+          uploadResult.public_id
+            .split("/")
+            .pop() || uniquePublicId,
+
+        originalName: file.originalname,
+
+        /*
+          storedPath now stores the Cloudinary public ID.
+          It is used later when deleting the asset.
+        */
+        storedPath: uploadResult.public_id,
+
+        publicUrl: uploadResult.secure_url,
+
+        mimeType: detectedType.mime,
+        type: mediaType,
+        size: uploadResult.bytes || file.size,
+
+        width:
+          uploadResult.width || null,
+
+        height:
+          uploadResult.height || null,
+
+        thumbnail: thumbnailUrl,
+        uploadedById: userId,
+      },
+
+      include: {
+        uploadedBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
         },
       },
-    },
-  });
+    });
+  } catch (error) {
+    await cloudinary.uploader.destroy(
+      uploadResult.public_id,
+      {
+        resource_type:
+          uploadResult.resource_type,
+        invalidate: true,
+      },
+    );
+
+    throw error;
+  }
 }
 
-export async function uploadMediaFiles(files, userId) {
+export async function uploadMediaFiles(
+  files,
+  userId,
+) {
   if (!files || files.length === 0) {
-    const error = new Error("At least one file is required");
+    const error = new Error(
+      "At least one file is required",
+    );
+
     error.statusCode = 400;
     throw error;
   }
 
   const savedFiles = [];
 
-  for (const file of files) {
-    try {
-      const savedFile = await saveSingleFile(file, userId);
+  try {
+    for (const file of files) {
+      const savedFile = await saveSingleFile(
+        file,
+        userId,
+      );
+
       savedFiles.push(savedFile);
-    } catch (error) {
-      for (const savedFile of savedFiles) {
-        try {
-          await fs.unlink(savedFile.storedPath);
-
-          if (savedFile.thumbnail) {
-            const thumbnailPath = path.resolve(
-              savedFile.thumbnail.replace(/^\//, ""),
-            );
-
-            await fs.unlink(thumbnailPath);
-          }
-
-          await prisma.media.delete({
-            where: {
-              id: savedFile.id,
-            },
-          });
-        } catch {
-          // Ignore cleanup errors.
-        }
-      }
-
-      throw error;
     }
-  }
 
-  return savedFiles;
+    return savedFiles;
+  } catch (error) {
+    for (const savedFile of savedFiles) {
+      await deleteCloudinaryAsset(savedFile);
+
+      try {
+        await prisma.media.delete({
+          where: {
+            id: savedFile.id,
+          },
+        });
+      } catch {
+        // Ignore cleanup errors.
+      }
+    }
+
+    throw error;
+  }
 }
 
 export async function getMediaList(query) {
@@ -197,6 +277,7 @@ export async function getMediaList(query) {
   const [items, total] = await Promise.all([
     prisma.media.findMany({
       where,
+
       include: {
         uploadedBy: {
           select: {
@@ -206,9 +287,11 @@ export async function getMediaList(query) {
           },
         },
       },
+
       orderBy: {
         createdAt: "desc",
       },
+
       skip,
       take: limit,
     }),
@@ -220,6 +303,7 @@ export async function getMediaList(query) {
 
   return {
     items,
+
     pagination: {
       page,
       limit,
@@ -234,6 +318,7 @@ export async function getMediaById(id) {
     where: {
       id,
     },
+
     include: {
       uploadedBy: {
         select: {
@@ -271,6 +356,7 @@ export async function updateMedia(id, data) {
     where: {
       id,
     },
+
     data: {
       ...(data.title !== undefined && {
         title: data.title,
@@ -280,6 +366,7 @@ export async function updateMedia(id, data) {
         altText: data.altText,
       }),
     },
+
     include: {
       uploadedBy: {
         select: {
@@ -305,27 +392,7 @@ export async function deleteMedia(id) {
     throw error;
   }
 
-  try {
-    await fs.unlink(media.storedPath);
-  } catch (error) {
-    if (error.code !== "ENOENT") {
-      throw error;
-    }
-  }
-
-  if (media.thumbnail) {
-    const thumbnailPath = path.resolve(
-      media.thumbnail.replace(/^\//, ""),
-    );
-
-    try {
-      await fs.unlink(thumbnailPath);
-    } catch (error) {
-      if (error.code !== "ENOENT") {
-        throw error;
-      }
-    }
-  }
+  await deleteCloudinaryAsset(media);
 
   await prisma.media.delete({
     where: {
