@@ -12,8 +12,13 @@ const swaggerDefinition = {
 
   servers: [
     {
-      url: "http://localhost:5000",
-      description: "Local development server",
+      url:
+        process.env.BACKEND_URL ||
+        "http://localhost:5000",
+      description:
+        process.env.NODE_ENV === "production"
+          ? "Production server"
+          : "Local development server",
     },
   ],
 
@@ -36,10 +41,7 @@ const swaggerDefinition = {
 
 const options = {
   swaggerDefinition,
-
-  apis: [
-    "./src/routes/*.js",
-  ],
+  apis: ["./src/routes/*.js"],
 };
 
 const swaggerSpec = swaggerJsdoc(options);
